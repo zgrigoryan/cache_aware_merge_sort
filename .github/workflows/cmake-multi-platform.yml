@@ -59,21 +59,21 @@ jobs:
       run: |
         # For Ubuntu
         echo "Checking build directory contents..."
-        ls -al ./build/  # List files to debug where the executable is located
+        ls -al ./build/  
     
         if [[ "$RUNNER_OS" == "Linux" ]]; then
-          if [ -f ./build/Merge_sort_benchmark ]; then
+          if [ -f ./Merge_sort_benchmark ]; then
             echo "Executable found, running benchmark..."
-            ./build/Merge_sort_benchmark --size 100000 --iterations 10
+            ./Merge_sort_benchmark --size 100000 --iterations 10
           else
             echo "Error: Merge_sort_benchmark not found in the build directory!"
             exit 1
           fi
         # For Windows 
         elif [[ "$RUNNER_OS" == "Windows" ]]; then
-          if [ -f ./build/Merge_sort_benchmark.exe ]; then
+          if [ -f ./Merge_sort_benchmark.exe ]; then
             echo "Executable found, running benchmark..."
-            ./build/Merge_sort_benchmark.exe --size 100000 --iterations 10
+            ./Merge_sort_benchmark.exe --size 100000 --iterations 10
           else
             echo "Error: Merge_sort_benchmark.exe not found in the build directory!"
             exit 1
