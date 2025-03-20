@@ -57,13 +57,24 @@ jobs:
     - name: Run Merge Sort Benchmark Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       run: |
-        # For Ubuntu
+        # For Ubuntu 
         if [[ "$RUNNER_OS" == "Linux" ]]; then
-          ./build/Merge_sort_benchmark --size 100000 --iterations 10
-        # For Windows
+          if [ -f ./build/Merge_sort_benchmark ]; then
+            ./build/Merge_sort_benchmark --size 100000 --iterations 10
+          else
+            echo "Error: Merge_sort_benchmark not found!"
+            exit 1
+          fi
+        # For Windows 
         elif [[ "$RUNNER_OS" == "Windows" ]]; then
-          ./build/Merge_sort_benchmark.exe --size 100000 --iterations 10
+          if [ -f ./build/Merge_sort_benchmark.exe ]; then
+            ./build/Merge_sort_benchmark.exe --size 100000 --iterations 10
+          else
+            echo "Error: Merge_sort_benchmark.exe not found!"
+            exit 1
+          fi
         fi
+
 
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
