@@ -1,47 +1,70 @@
-name: Merge Sort Benchmark Test
+name: CMake on multiple platforms
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
 
 jobs:
-  benchmark:
-    runs-on: ubuntu-latest  
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [Release]
+        c_compiler: [gcc, clang, cl]
+        include:
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
-      - name: Set up C++ compiler and dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-          sudo apt-get install -y cmake
-          sudo apt-get install -y g++
-          sudo apt-get install -y libgtest-dev
-          sudo apt-get install -y libboost-all-dev
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-      - name: Build Merge_sort_benchmark
-        run: |
-          mkdir build
-          cd build
-          cmake ..
-          make Merge_sort_benchmark
+    - name: Configure CMake
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -S ${{ github.workspace }}
 
-      - name: Run benchmark test
-        run: |
+    - name: Build
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+
+    - name: Run Merge Sort Benchmark Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: |
+        # For Ubuntu
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
           ./build/Merge_sort_benchmark --size 100000 --iterations 10
-          
-      - name: Capture benchmark results
-        run: |
-          ./build/Merge_sort_benchmark --size 100000 --iterations 10 > benchmark_output.txt
-          
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v2
-        with:
-          name: benchmark-output
-          path: benchmark_output.txt
+        # For Windows
+        elif [[ "$RUNNER_OS" == "Windows" ]]; then
+          ./build/Merge_sort_benchmark.exe --size 100000 --iterations 10
+        fi
+
+    - name: Test
+      working-directory: ${{ steps.strings.outputs.build-output-dir }}
+      run: ctest --build-config ${{ matrix.build_type }}
