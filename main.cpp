@@ -1,118 +1,141 @@
-#include <algorithm>
 #include <iostream>
 #include <vector>
+#include <cstdlib>
+#include <cstring>
 #include <chrono>
-#include <random>
-using namespace std; 
+#include <algorithm> 
 
-// cache-aware merge sort 
-// reads input arrays in blocks that fit into the L1 cache (64KB data cache)
-// merges the blocks in a cache-aware way
+// Cache parameteres 
+constexpr int CACHE_LINE_SIZE = 128;   // in bytes
+constexpr int L1_CACHE_SIZE = 65536;     // L1 data cache (64 KB)
+constexpr int BLOCK_SIZE = L1_CACHE_SIZE / sizeof(int);  // number of ints that fit in L1 cache
 
-void cache_aware_merge(int* arr, int n) {
-    // block size that fits into the L1 cache
-    const int block_size = 64 * 1024 / sizeof(int); // 64KB data cache
-    // number of blocks
-    const int num_blocks = n / block_size + (n % block_size ? 1 : 0);
-    // allocate memory for the temporary array
-    int* temp = new int[n];
-    // sort each block
-    for (int i = 0; i < num_blocks; i++) {
-        int start = i * block_size;
-        int end = min(start + block_size, n);
-        sort(arr + start, arr + end);
-    }
-    // merge the blocks in a cache-aware way
-    for (int block_size = 1; block_size < n; block_size *= 2) {
-        for (int i = 0; i < n; i += 2 * block_size) {
-            int start1 = i;
-            int end1 = min(i + block_size, n);
-            int start2 = end1;
-            int end2 = min(i + 2 * block_size, n);
-            int p1 = start1;
-            int p2 = start2;
-            int p = start1;
-            while (p1 < end1 && p2 < end2) {
-                if (arr[p1] < arr[p2]) {
-                    temp[p++] = arr[p1++];
-                } else {
-                    temp[p++] = arr[p2++];
-                }
-            }
-            while (p1 < end1) {
-                temp[p++] = arr[p1++];
-            }
-            while (p2 < end2) {
-                temp[p++] = arr[p2++];
-            }
-            for (int j = start1; j < end2; j++) {
-                arr[j] = temp[j];
-            }
+// ---------------------------------------------------
+// 1. Cache-Aware Merge Sort (with blocking)
+// ---------------------------------------------------
+
+// A merge function that processes blocks of elements aligned to cache lines.
+void blockedMerge(std::vector<int>& arr, std::vector<int>& temp, int left, int mid, int right) {
+    int i = left, j = mid, k = left;
+
+    while (i < mid && j < right) {
+        int block_end_i = std::min(i + BLOCK_SIZE, mid);
+        int block_end_j = std::min(j + BLOCK_SIZE, right);
+
+        while (i < block_end_i && j < block_end_j) {
+            if (arr[i] < arr[j])
+                temp[k++] = arr[i++];
+            else
+                temp[k++] = arr[j++];
         }
     }
 
-    delete[] temp;
+    while (i < mid) temp[k++] = arr[i++];
+    while (j < right) temp[k++] = arr[j++];
+
+    std::memcpy(&arr[left], &temp[left], (right - left) * sizeof(int));
 }
 
-// usual merge sort 
-// recursively divides the input array into two halves
-
-void merge(int* arr, int n) {
-    if (n <= 1) {
+void cacheAwareMergeSort(std::vector<int>& arr, std::vector<int>& temp, int left, int right) {
+    if (right - left <= 1)
         return;
-    }
-    int mid = n / 2;
-    merge(arr, mid);
-    merge(arr + mid, n - mid);
-    int* temp = new int[n];
-    int p1 = 0;
-    int p2 = mid;
-    int p = 0;
-    while (p1 < mid && p2 < n) {
-        if (arr[p1] < arr[p2]) {
-            temp[p++] = arr[p1++];
-        } else {
-            temp[p++] = arr[p2++];
-        }
-    }
-    while (p1 < mid) {
-        temp[p++] = arr[p1++];
-    }
-    while (p2 < n) {
-        temp[p++] = arr[p2++];
-    }
-    for (int i = 0; i < n; i++) {
-        arr[i] = temp[i];
-    }
-    delete[] temp;
+
+    int mid = left + (right - left) / 2;
+
+    cacheAwareMergeSort(arr, temp, left, mid);
+    cacheAwareMergeSort(arr, temp, mid, right);
+
+    // merge the two sorted halves using blocked merge 
+    blockedMerge(arr, temp, left, mid, right);
 }
 
-int main(){
+void runCacheAwareMergeSort(std::vector<int>& arr) {
+    std::vector<int> temp(arr.size());
+    cacheAwareMergeSort(arr, temp, 0, arr.size());
+}
 
-    int* arr = new int[20000000];
-    for (int i = 0; i < 20000000; i++) {
-        arr[i] = rand();
+// ---------------------------------------------------
+// 2. Standard Merge Sort 
+// ---------------------------------------------------
+void standardMerge(std::vector<int>& arr, std::vector<int>& temp, int left, int mid, int right) {
+    int i = left, j = mid, k = left;
+    while (i < mid && j < right) {
+        if (arr[i] < arr[j])
+            temp[k++] = arr[i++];
+        else
+            temp[k++] = arr[j++];
+    }
+    while (i < mid) temp[k++] = arr[i++];
+    while (j < right) temp[k++] = arr[j++];
+    std::memcpy(&arr[left], &temp[left], (right - left) * sizeof(int));
+}
+
+void standardMergeSort(std::vector<int>& arr, std::vector<int>& temp, int left, int right) {
+    if (right - left <= 1)
+        return;
+    int mid = left + (right - left) / 2;
+    standardMergeSort(arr, temp, left, mid);
+    standardMergeSort(arr, temp, mid, right);
+    standardMerge(arr, temp, left, mid, right);
+}
+
+void runStandardMergeSort(std::vector<int>& arr) {
+    std::vector<int> temp(arr.size());
+    standardMergeSort(arr, temp, 0, arr.size());
+}
+
+// ---------------------------------------------------
+// 3. Cache-Oblivious Merge Sort (Recursive, contiguous)
+// ---------------------------------------------------
+//
+// This implementation uses a standard recursive merge sort that operates
+// entirely on contiguous segments. The merging step uses the C++ STL function
+// std::inplace_merge, which works on contiguous data without explicit tuning.
+void cacheObliviousMergeSort(std::vector<int>& arr, int left, int right) {
+    if (right - left <= 1)
+        return;
+    
+    int mid = left + (right - left) / 2;
+    
+    cacheObliviousMergeSort(arr, left, mid);
+    cacheObliviousMergeSort(arr, mid, right);
+    
+    // std::inplace_merge works on contiguous ranges and is designed to be efficient.
+    std::inplace_merge(arr.begin() + left, arr.begin() + mid, arr.begin() + right);
+}
+
+void runCacheObliviousMergeSort(std::vector<int>& arr) {
+    cacheObliviousMergeSort(arr, 0, arr.size());
+}
+
+// ---------------------------------------------------
+// Benchmark function
+// ---------------------------------------------------
+void benchmarkSort(void (*sortFunction)(std::vector<int>&), std::vector<int>& arr, const std::string& name) {
+    auto start = std::chrono::high_resolution_clock::now();
+    sortFunction(arr);
+    auto end = std::chrono::high_resolution_clock::now();
+    
+    double duration = std::chrono::duration<double, std::milli>(end - start).count();
+    std::cout << name << " took " << duration << " ms\n";
+}
+
+int main() {
+    const size_t N = 1'000'000; 
+    std::vector<int> arr_standard(N), arr_cacheAware(N), arr_cacheOblivious(N);
+
+    // Initialize the arrays with identical random data.
+    for (size_t i = 0; i < N; i++) {
+        int value = rand() % N;
+        arr_standard[i] = value;
+        arr_cacheAware[i] = value;
+        arr_cacheOblivious[i] = value;
     }
 
-    auto start = chrono::high_resolution_clock::now();
-    cache_aware_merge(arr, 20000000);
-    auto end = chrono::high_resolution_clock::now();
+    std::cout << "Benchmarking...\n";
+    benchmarkSort(runStandardMergeSort, arr_standard, "Standard Merge Sort");
+    benchmarkSort(runCacheAwareMergeSort, arr_cacheAware, "Cache-Aware Merge Sort");
+    benchmarkSort(runCacheObliviousMergeSort, arr_cacheOblivious, "Cache-Oblivious Merge Sort");
 
-    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-
-    cout << "Cache-aware merge sort: " << duration.count() << " ms" << endl;
-
-    for (int i = 0; i < 20000000; i++) {
-        arr[i] = rand();
-    }
-
-    start = chrono::high_resolution_clock::now();
-    merge(arr, 20000000);
-    end = chrono::high_resolution_clock::now();
-
-    duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-
-    cout << "Usual merge sort:" << duration.count() << " ms" << endl;
-
-    return 0; 
+    return 0;
 }
