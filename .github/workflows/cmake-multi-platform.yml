@@ -78,7 +78,7 @@ jobs:
       shell: bash
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       run: |
-        executable_name="matrix_benchmark"
+        executable_name="Merge_sort_benchmark"
 
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             executable_name="Merge_sort_benchmark.exe"
