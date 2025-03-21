@@ -36,6 +36,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Download Kaizen 0.1.0
+      shell: bash
+      run: |
+        mkdir -p "${{ github.workspace }}/external"
+        curl -L -o "${{ github.workspace }}/external/kaizen.h" \
+              "https://github.com/heinsaar/kaizen/releases/download/0.1.0/kaizen.h"
 
     - name: Set reusable strings
       id: strings
@@ -44,43 +51,48 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
     - name: Configure CMake
-      run: >
-        cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -S ${{ github.workspace }}
+      shell: bash
+      run: |
+        echo "Configuring CMake..."
+        cmake -B "${{ steps.strings.outputs.build-output-dir }}" \
+              -S "${{ github.workspace }}" \
+              -DCMAKE_CXX_COMPILER="${{ matrix.cpp_compiler }}" \
+              -DCMAKE_C_COMPILER="${{ matrix.c_compiler }}" \
+              -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+              -DCMAKE_CXX_FLAGS="-I${{ github.workspace }}/external"
 
     - name: Build
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+      shell: bash
+      run: |
+        echo "Building..."
+        cmake --build "${{ steps.strings.outputs.build-output-dir }}" --config "${{ matrix.build_type }}"
     
-    - name: Run Merge Sort Benchmark Test
+    - name: Test
+      shell: bash
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       run: |
-        # For Ubuntu
-        echo "Checking build directory contents..."
-        ls -al ./build/  
-    
-        if [[ "$RUNNER_OS" == "Linux" ]]; then
-          if [ -f ./Merge_sort_benchmark ]; then
-            echo "Executable found, running benchmark..."
-            ./Merge_sort_benchmark --size 100000 --iterations 10
-          else
-            echo "Error: Merge_sort_benchmark not found in the build directory!"
-            exit 1
-          fi
-        # For Windows 
-        elif [[ "$RUNNER_OS" == "Windows" ]]; then
-          if [ -f ./Merge_sort_benchmark.exe ]; then
-            echo "Executable found, running benchmark..."
-            ./Merge_sort_benchmark.exe --size 100000 --iterations 10
-          else
-            echo "Error: Merge_sort_benchmark.exe not found in the build directory!"
-            exit 1
-          fi
-        fi
-
-
-    - name: Test
+        echo "Running tests..."
+        ctest --build-config "${{ matrix.build_type }}"
+ 
+    - name: Run Merge Sort Benchmark Test
+      shell: bash
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
-      run: ctest --build-config ${{ matrix.build_type }}
+      run: |
+        executable_name="matrix_benchmark"
+
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            executable_name="Merge_sort_benchmark.exe"
+            executable_path="Release/$executable_name"  # Windows binary is in Release/
+          else
+            executable_path="./$executable_name"  # Linux/macOS binary
+          fi
+
+          # Check if the executable exists before running
+          echo "Checking if executable exists: $executable_path"
+          if [ -f "$executable_path" ]; then
+            echo "Executable found, running it..."
+            "$executable_path" --size 100000 --iterations 100
+          else
+            echo "Error: Executable not found at $executable_path"
+            exit 1
+          fi
